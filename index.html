@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ultimate Expense Tracker</title>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    font-family: Arial, sans-serif;
+    background: #eef2f3;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+body.dark {
+    background: #121212;
+    color: white;
+}
+
+.container {
+    background: white;
+    width: 430px;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 0 15px rgba(0,0,0,.2);
+}
+
+body.dark .container {
+    background: #1e1e1e;
+}
+
+h1, h3 { text-align: center; }
+
+.summary {
+    display: flex;
+    justify-content: space-between;
+}
+
+.box {
+    width: 48%;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.income { background: #d4edda; }
+.expense { background: #f8d7da; }
+
+input, select, button {
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+}
+
+button {
+    border: none;
+    background: #007bff;
+    color: white;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+button:hover { background: #0056b3; }
+
+.actions {
+    display: flex;
+    gap: 5px;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    background: #f9f9f9;
+    margin: 8px 0;
+    padding: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-right: 5px solid;
+}
+
+body.dark li {
+    background: #2a2a2a;
+}
+
+.plus { border-color: green; }
+.minus { border-color: red; }
+
+.delete {
+    background: red;
+    color: white;
+    border: none;
+    padding: 3px 6px;
+    cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>Expense Tracker</h1>
+<button onclick="toggleDark()">🌙 Dark Mode</button>
+
+<h3>Balance</h3>
+<h2 id="balance">$0</h2>
+
+<div class="summary">
+    <div class="box income">
+        <h4>Income</h4>
+        <p id="income">$0</p>
+    </div>
+    <div class="box expense">
+        <h4>Expense</h4>
+        <p id="expense">$0</p>
+    </div>
+</div>
+
+<h3>Add Transaction</h3>
+<input id="text" placeholder="Description">
+<input id="amount" type="number" placeholder="+income / -expense">
+<select id="category">
+    <option>Food</option>
+    <option>Travel</option>
+    <option>Rent</option>
+    <option>Shopping</option>
+    <option>Other</option>
+</select>
+<input id="date" type="date">
+<button onclick="addTransaction()">Add</button>
+
+<h3>Filters</h3>
+<div class="actions">
+    <input type="month" id="month" onchange="filterMonth()">
+    <input id="search" placeholder="Search" oninput="searchData()">
+</div>
+
+<button onclick="exportCSV()">🗃️ Export CSV</button>
+
+<h3>Income vs Expense</h3>
+<canvas id="chart"></canvas>
+
+<h3>History</h3>
+<ul id="list"></ul>
+
+</div>
+
+<script>
+let transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+let chart;
+
+// Save
+function save() {
+    localStorage.setItem("transactions", JSON.stringify(transactions));
+}
+
+// Add Transaction
+function addTransaction() {
+    const text = document.getElementById("text").value;
+    const amount = +document.getElementById("amount").value;
+    const category = document.getElementById("category").value;
+    const date = document.getElementById("date").value;
+
+    if (!text || !amount || !date) {
+        alert("Fill all fields");
+        return;
+    }
+
+    transactions.push({
+        id: Date.now(),
+        text,
+        amount,
+        category,
+        date
+    });
+
+    save();
+    init();
+
+    document.getElementById("text").value = "";
+    document.getElementById("amount").value = "";
+}
+
+// Init
+function init() {
+    list.innerHTML = "";
+    transactions.forEach(addDOM);
+    updateValues();
+    updateChart();
+}
+
+// Add to DOM
+function addDOM(t) {
+    const li = document.createElement("li");
+    li.className = t.amount > 0 ? "plus" : "minus";
+
+    li.innerHTML = `
+        <div>
+            <strong>${t.text}</strong><br>
+            <small>${t.category} | ${t.date}</small>
+        </div>
+        <span>$${Math.abs(t.amount)}</span>
+        <button class="delete" onclick="removeTx(${t.id})">X</button>
+    `;
+
+    list.appendChild(li);
+}
+
+// Update Values
+function updateValues() {
+    const amounts = transactions.map(t => t.amount);
+    const total = amounts.reduce((a, b) => a + b, 0);
+    const income = amounts.filter(a => a > 0).reduce((a, b) => a + b, 0);
+    const expense = amounts.filter(a => a < 0).reduce((a, b) => a + b, 0);
+
+    balance.innerText = `$${total}`;
+    incomeEl.innerText = `$${income}`;
+    expenseEl.innerText = `$${Math.abs(expense)}`;
+}
+
+// Remove
+function removeTx(id) {
+    transactions = transactions.filter(t => t.id !== id);
+    save();
+    init();
+}
+
+// Search
+function searchData() {
+    const s = search.value.toLowerCase();
+    list.innerHTML = "";
+    transactions
+        .filter(t => t.text.toLowerCase().includes(s))
+        .forEach(addDOM);
+}
+
+// Month Filter
+function filterMonth() {
+    const m = month.value;
+    list.innerHTML = "";
+    transactions
+        .filter(t => t.date.startsWith(m))
+        .forEach(addDOM);
+}
+
+// Dark Mode
+function toggleDark() {
+    document.body.classList.toggle("dark");
+}
+
+// CSV Export
+function exportCSV() {
+    let csv = "Description,Amount,Category,Date\n";
+    transactions.forEach(t => {
+        csv += `${t.text},${t.amount},${t.category},${t.date}\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "expense.csv";
+    a.click();
+}
+
+// Chart
+function updateChart() {
+    const income = transactions.filter(t => t.amount > 0)
+        .reduce((a, b) => a + b.amount, 0);
+
+    const expense = Math.abs(transactions.filter(t => t.amount < 0)
+        .reduce((a, b) => a + b.amount, 0));
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(document.getElementById("chart"), {
+        type: "pie",
+        data: {
+            labels: ["Income", "Expense"],
+            datasets: [{
+                data: [income, expense],
+                backgroundColor: ["green", "red"]
+            }]
+        }
+    });
+}
+
+// Elements
+const balance = document.getElementById("balance");
+const incomeEl = document.getElementById("income");
+const expenseEl = document.getElementById("expense");
+const list = document.getElementById("list");
+const search = document.getElementById("search");
+const month = document.getElementById("month");
+
+init();
+</script>
+</body>
+</html>
